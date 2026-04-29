@@ -1,0 +1,154 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand*\HyPL@Entry[1]{}
+\HyPL@Entry{0<</S/D>>}
+\HyPL@Entry{2<</S/R>>}
+\citation{wu2020mind}
+\HyPL@Entry{4<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {1}任务背景与数据}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}任务定义}{1}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}数据来源与规模}{1}{subsection.1.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces 原始数据规模}}{1}{table.1}\protected@file@percent }
+\newlabel{tab:raw-stat}{{1}{1}{原始数据规模}{table.1}{}}
+\citation{joulin2017fasttext}
+\citation{bojanowski2017enriching}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}标签映射体系}{2}{subsection.1.3}\protected@file@percent }
+\newlabel{sec:label-map}{{1.3}{2}{标签映射体系}{subsection.1.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces 统一标签体系（从 Excel 反推）}}{2}{table.2}\protected@file@percent }
+\newlabel{tab:label-system}{{2}{2}{统一标签体系（从 Excel 反推）}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}算法原理简述}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}FastText 原理}{2}{subsection.2.1}\protected@file@percent }
+\citation{devlin2019bert}
+\citation{vaswani2017attention}
+\citation{liu2019roberta}
+\citation{yang2024qwen2}
+\newlabel{eq:ft-pool}{{1}{3}{FastText 原理}{equation.2.1}{}}
+\newlabel{eq:ft-softmax}{{2}{3}{FastText 原理}{equation.2.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}BERT 原理}{3}{subsection.2.2}\protected@file@percent }
+\newlabel{eq:bert-cls}{{3}{3}{BERT 原理}{equation.2.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Qwen2.5 大模型原理}{3}{subsection.2.3}\protected@file@percent }
+\newlabel{eq:qwen-lm}{{4}{3}{Qwen2.5 大模型原理}{equation.2.4}{}}
+\citation{brown2020gpt3}
+\@writefile{toc}{\contentsline {section}{\numberline {3}数据清洗与可视化}{4}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}清洗与划分流程}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces 数据清洗流水线（数字直接来自运行日志 \texttt  {outputs/logs/01\_clean.log}）}}{5}{table.3}\protected@file@percent }
+\newlabel{tab:cleaning}{{3}{5}{数据清洗流水线（数字直接来自运行日志 \texttt {outputs/logs/01\_clean.log}）}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces 清洗后数据基本统计：(a) 三类分布（Soft 偏多）、 (b) MIND 与 GOOGLE 在 Hard/Soft/Other 上的贡献比例不同——MIND 偏 Hard 与 Other， GOOGLE 在 Soft 上提供更多体育类样本、 (c) 标题词数集中在 6–15 词，长尾极少。}}{5}{figure.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {三类整体分布}}}{5}{figure.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {源 $\times $ 标签 堆叠}}}{5}{figure.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {标题词数直方图}}}{5}{figure.1}\protected@file@percent }
+\newlabel{fig:viz1}{{1}{5}{清洗后数据基本统计：(a) 三类分布（Soft 偏多）、 (b) MIND 与 GOOGLE 在 Hard/Soft/Other 上的贡献比例不同——MIND 偏 Hard 与 Other， GOOGLE 在 Soft 上提供更多体育类样本、 (c) 标题词数集中在 6–15 词，长尾极少。}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces 进一步的统计：(a) 高频词大致体现了三类的“判别词”—— Hard 集中在 \texttt  {trump / police / state}，Soft 集中在 \texttt  {game / new / first}， Other 在 \texttt  {health / things / new}； (b) 9:1 分层划分后，三类比例严格一致； (c) 三类的标题长度分布几乎重合，说明“长度”本身不是判别特征，模型必须靠语义。}}{5}{figure.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {每类 Top-15 高频词}}}{5}{figure.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {训练 / 测试比例对照}}}{5}{figure.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {每类标题长度箱线图}}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:viz2}{{2}{5}{进一步的统计：(a) 高频词大致体现了三类的“判别词”—— Hard 集中在 \texttt {trump / police / state}，Soft 集中在 \texttt {game / new / first}， Other 在 \texttt {health / things / new}； (b) 9:1 分层划分后，三类比例严格一致； (c) 三类的标题长度分布几乎重合，说明“长度”本身不是判别特征，模型必须靠语义。}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}可视化分析}{6}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}FastText 实验}{6}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}实现细节}{6}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}超参网格搜索（18 组）}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}数据增强对比}{6}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces FastText 网格搜索 dev macro-F1 完整结果（粗体为最优配置）}}{7}{table.4}\protected@file@percent }
+\newlabel{tab:ft-grid}{{4}{7}{FastText 网格搜索 dev macro-F1 完整结果（粗体为最优配置）}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces FastText 数据增强对比（dev 集）}}{7}{table.5}\protected@file@percent }
+\newlabel{tab:ft-aug}{{5}{7}{FastText 数据增强对比（dev 集）}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}FastText 测试集结果}{8}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces FastText 在测试集上的 per-class 指标（直接来自运行日志）}}{8}{table.6}\protected@file@percent }
+\newlabel{tab:ft-test}{{6}{8}{FastText 在测试集上的 per-class 指标（直接来自运行日志）}{table.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces FastText 在测试集 19\,365 条上的混淆矩阵。 对角线最强的是 Soft（9\,369/10\,215，召回 0.917）； 最弱的是 Other（3\,267/4\,706）——常见错法是把 Other 类的 health/tech 类标题误判成 Hard， 后面 BERT 同样有这个倾向。}}{8}{figure.3}\protected@file@percent }
+\newlabel{fig:ft-cm}{{3}{8}{FastText 在测试集 19\,365 条上的混淆矩阵。 对角线最强的是 Soft（9\,369/10\,215，召回 0.917）； 最弱的是 Other（3\,267/4\,706）——常见错法是把 Other 类的 health/tech 类标题误判成 Hard， 后面 BERT 同样有这个倾向。}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}BERT 实验}{9}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}模型与训练流程}{9}{subsection.5.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces BERT/RoBERTa 训练超参}}{9}{table.7}\protected@file@percent }
+\newlabel{tab:bert-hparam}{{7}{9}{BERT/RoBERTa 训练超参}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}BERT 输出如何转成分类标签}{9}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}消融实验：max\_len、学习率、训练数据量}{10}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.1}max\_len 消融}{10}{subsubsection.5.3.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces BERT max\_len 消融（dev 集）}}{10}{table.8}\protected@file@percent }
+\newlabel{tab:bert-maxlen}{{8}{10}{BERT max\_len 消融（dev 集）}{table.8}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.2}学习率消融}{10}{subsubsection.5.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces BERT 学习率消融（dev 集，bert-base-uncased，3 epoch）}}{10}{table.9}\protected@file@percent }
+\newlabel{tab:bert-lr}{{9}{10}{BERT 学习率消融（dev 集，bert-base-uncased，3 epoch）}{table.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces BERT \texttt  {max\_len} 消融折线图：32/64/128 三组在 dev 上 macro-F1 几乎平直， 说明对短文本场景增大 \texttt  {max\_len} 的边际收益接近于零。}}{11}{figure.4}\protected@file@percent }
+\newlabel{fig:bert-maxlen}{{4}{11}{BERT \texttt {max\_len} 消融折线图：32/64/128 三组在 dev 上 macro-F1 几乎平直， 说明对短文本场景增大 \texttt {max\_len} 的边际收益接近于零。}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces BERT 学习率消融折线：lr 从 $1\!\times \!10^{-5}$ 到 $5\!\times \!10^{-5}$ 单调上升， 但 $2\!\times \!10^{-5}$ 之后增益迅速收敛，约 1.3 pp 内。 这与 BERT 原论文推荐的 $2\!\times \!10^{-5}$\,–\,$5\!\times \!10^{-5}$ 区间吻合。}}{11}{figure.5}\protected@file@percent }
+\newlabel{fig:bert-lr}{{5}{11}{BERT 学习率消融折线：lr 从 $1\!\times \!10^{-5}$ 到 $5\!\times \!10^{-5}$ 单调上升， 但 $2\!\times \!10^{-5}$ 之后增益迅速收敛，约 1.3 pp 内。 这与 BERT 原论文推荐的 $2\!\times \!10^{-5}$\,–\,$5\!\times \!10^{-5}$ 区间吻合。}{figure.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.3}训练数据量曲线}{12}{subsubsection.5.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces BERT 训练数据量曲线（dev 集）}}{12}{table.10}\protected@file@percent }
+\newlabel{tab:bert-curve}{{10}{12}{BERT 训练数据量曲线（dev 集）}{table.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces BERT 数据量学习曲线：从 10\,\% 到 100\,\%， dev macro-F1 从 0.766 单调上升到 0.815，但增速明显减缓—— 30\,\% $\to $ 60\,\% 提升 1.4 pp，而 60\,\% $\to $ 100\,\% 只提升 1.2 pp。 按这个趋势外推，再加一倍数据估计也只能再涨 0.5–0.8 pp。}}{12}{figure.6}\protected@file@percent }
+\newlabel{fig:bert-curve}{{6}{12}{BERT 数据量学习曲线：从 10\,\% 到 100\,\%， dev macro-F1 从 0.766 单调上升到 0.815，但增速明显减缓—— 30\,\% $\to $ 60\,\% 提升 1.4 pp，而 60\,\% $\to $ 100\,\% 只提升 1.2 pp。 按这个趋势外推，再加一倍数据估计也只能再涨 0.5–0.8 pp。}{figure.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}BERT-base vs RoBERTa 对比}{13}{subsection.5.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces BERT-base 与 RoBERTa-base 在测试集上的对比（19\,365 条）}}{13}{table.11}\protected@file@percent }
+\newlabel{tab:bert-vs-roberta}{{11}{13}{BERT-base 与 RoBERTa-base 在测试集上的对比（19\,365 条）}{table.11}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces 两个模型在测试集上的混淆矩阵几乎一致—— RoBERTa 在 Soft 类比 BERT 高 0.06 pp，BERT 在 Other 类比 RoBERTa 高 0.09 pp， 属于浮点噪声范围。}}{13}{figure.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {bert-base-uncased}}}{13}{figure.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {roberta-base}}}{13}{figure.7}\protected@file@percent }
+\newlabel{fig:bert-vs-roberta-cm}{{7}{13}{两个模型在测试集上的混淆矩阵几乎一致—— RoBERTa 在 Soft 类比 BERT 高 0.06 pp，BERT 在 Other 类比 RoBERTa 高 0.09 pp， 属于浮点噪声范围。}{figure.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Qwen2.5 大模型实验}{13}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}评测策略与抽样}{13}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}三种 prompt 策略}{14}{subsection.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Qwen2.5-7B 三种 prompt 在 500 抽样上的对比}}{14}{table.12}\protected@file@percent }
+\newlabel{tab:qwen-prompt}{{12}{14}{Qwen2.5-7B 三种 prompt 在 500 抽样上的对比}{table.12}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Qwen2.5-7B 三种 prompt 的混淆矩阵。所有模式的共同问题是： \textbf  {Other 类基本被错判到 Hard 或 Soft}，体现在 (a)(c) 第三行召回极低（< 0.04）。 few-shot 把 Other 的召回拉到了 0.14，但仍远远低于 BERT 的 0.74。}}{14}{figure.8}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {zero}}}{14}{figure.8}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {few}}}{14}{figure.8}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {CoT}}}{14}{figure.8}\protected@file@percent }
+\newlabel{fig:qwen-prompt-cm}{{8}{14}{Qwen2.5-7B 三种 prompt 的混淆矩阵。所有模式的共同问题是： \textbf {Other 类基本被错判到 Hard 或 Soft}，体现在 (a)(c) 第三行召回极低（< 0.04）。 few-shot 把 Other 的召回拉到了 0.14，但仍远远低于 BERT 的 0.74。}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Qwen 三种 prompt 的指标柱状图：CoT 的 accuracy 略高（0.586）， 但 macro-F1 反而最低，体现“chain-of-thought 让 Soft 更准、Other 更失”的失衡现象。 综合 macro-F1 选 few-shot 作为后续 Qwen 代表。}}{15}{figure.9}\protected@file@percent }
+\newlabel{fig:qwen-prompt-bar}{{9}{15}{Qwen 三种 prompt 的指标柱状图：CoT 的 accuracy 略高（0.586）， 但 macro-F1 反而最低，体现“chain-of-thought 让 Soft 更准、Other 更失”的失衡现象。 综合 macro-F1 选 few-shot 作为后续 Qwen 代表。}{figure.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}模型规模对比：1.5B vs 7B}{15}{subsection.6.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces Qwen2.5 不同参数规模的对比（500 抽样，few-shot $k$=6）}}{15}{table.13}\protected@file@percent }
+\newlabel{tab:qwen-size}{{13}{15}{Qwen2.5 不同参数规模的对比（500 抽样，few-shot $k$=6）}{table.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Qwen2.5 模型规模对比：(a)(b) 混淆矩阵显示 1.5B 在 Soft 类大量误判到 Hard（红色那条对角线偏弱）， 而 7B 把 Soft 召回从 0.50 拉到 0.72；(c) 三类指标 7B 全面优于 1.5B， 但 1.5B 推理速度是 7B 的 4.4 倍。}}{16}{figure.10}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {Qwen-1.5B 混淆矩阵}}}{16}{figure.10}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {Qwen-7B 混淆矩阵}}}{16}{figure.10}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(c)}{\ignorespaces {1.5B vs 7B 指标柱状图}}}{16}{figure.10}\protected@file@percent }
+\newlabel{fig:qwen-size}{{10}{16}{Qwen2.5 模型规模对比：(a)(b) 混淆矩阵显示 1.5B 在 Soft 类大量误判到 Hard（红色那条对角线偏弱）， 而 7B 把 Soft 召回从 0.50 拉到 0.72；(c) 三类指标 7B 全面优于 1.5B， 但 1.5B 推理速度是 7B 的 4.4 倍。}{figure.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Few-shot 数量影响}{16}{subsection.6.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Qwen2.5-7B few-shot 数量影响}}{16}{table.14}\protected@file@percent }
+\newlabel{tab:qwen-fewshot}{{14}{16}{Qwen2.5-7B few-shot 数量影响}{table.14}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}综合实验分析}{16}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}三模型主对比}{16}{subsection.7.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Qwen2.5-7B few-shot 数量对性能的影响。 非单调：$k=0\to 3$ 反而\textbf  {下降} 2.5 pp（少量示例可能误导模型）， $k=3\to 6$ 才回升到 0.484；$k=6\to 9$ 又略降，呈“先降后升再降”的波动。}}{17}{figure.11}\protected@file@percent }
+\newlabel{fig:qwen-fewshot}{{11}{17}{Qwen2.5-7B few-shot 数量对性能的影响。 非单调：$k=0\to 3$ 反而\textbf {下降} 2.5 pp（少量示例可能误导模型）， $k=3\to 6$ 才回升到 0.484；$k=6\to 9$ 又略降，呈“先降后升再降”的波动。}{figure.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces 三模型在测试集上的总体指标对比}}{17}{table.15}\protected@file@percent }
+\newlabel{tab:main-compare}{{15}{17}{三模型在测试集上的总体指标对比}{table.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces 三模型主对比可视化：(a) 每类 F1 显示三个模型在 Soft 类上都最强， Hard 次之，Other 最弱；Qwen 在 Other 类几乎崩溃； (b) 混淆矩阵 subplot 让差异一眼能看出来。}}{17}{figure.12}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {每类 F1 分组柱状图}}}{17}{figure.12}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {三模型混淆矩阵 subplot}}}{17}{figure.12}\protected@file@percent }
+\newlabel{fig:main-compare}{{12}{17}{三模型主对比可视化：(a) 每类 F1 显示三个模型在 Soft 类上都最强， Hard 次之，Other 最弱；Qwen 在 Other 类几乎崩溃； (b) 混淆矩阵 subplot 让差异一眼能看出来。}{figure.12}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}错例重叠与人工错因分析}{18}{subsection.7.2}\protected@file@percent }
+\newlabel{sec:err-analysis}{{7.2}{18}{错例重叠与人工错因分析}{subsection.7.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces (a) 维恩图基于 500 抽样：FastText、BERT、Qwen 各自的错样本集合， 交叉部分是“三个模型都错”的真正难样本； (b) 30 条三模型预测不一致样本的人工错因分布： \texttt  {entity-bias} 与 \texttt  {fuzzy-other} 各 12 条（40\,\%），\texttt  {ambiguous} 6 条（20\,\%）。}}{18}{figure.13}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(a)}{\ignorespaces {三模型错例集合维恩图}}}{18}{figure.13}\protected@file@percent }
+\@writefile{lof}{\contentsline {subfigure}{\numberline{(b)}{\ignorespaces {人工错因分类饼图}}}{18}{figure.13}\protected@file@percent }
+\newlabel{fig:err}{{13}{18}{(a) 维恩图基于 500 抽样：FastText、BERT、Qwen 各自的错样本集合， 交叉部分是“三个模型都错”的真正难样本； (b) 30 条三模型预测不一致样本的人工错因分布： \texttt {entity-bias} 与 \texttt {fuzzy-other} 各 12 条（40\,\%），\texttt {ambiguous} 6 条（20\,\%）。}{figure.13}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces 人工错因标注三类的定义与典型例子}}{19}{table.16}\protected@file@percent }
+\newlabel{tab:err-type}{{16}{19}{人工错因标注三类的定义与典型例子}{table.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}三模型集成投票}{19}{subsection.7.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {17}{\ignorespaces 三模型集成 vs 单模型（500 抽样）}}{19}{table.17}\protected@file@percent }
+\newlabel{tab:ensemble}{{17}{19}{三模型集成 vs 单模型（500 抽样）}{table.17}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces 三模型多数投票集成的混淆矩阵。 和 BERT 单模相比，Other 类召回从 0.74 降到 0.64—— 就是因为 Qwen 把许多 Other 拉到 Hard 那一票，多数投票后变成 Hard。}}{20}{figure.14}\protected@file@percent }
+\newlabel{fig:ensemble-cm}{{14}{20}{三模型多数投票集成的混淆矩阵。 和 BERT 单模相比，Other 类召回从 0.74 降到 0.64—— 就是因为 Qwen 把许多 Other 拉到 Hard 那一票，多数投票后变成 Hard。}{figure.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}训练 / 推理成本对比}{20}{subsection.7.4}\protected@file@percent }
+\newlabel{sec:cost}{{7.4}{20}{训练 / 推理成本对比}{subsection.7.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {18}{\ignorespaces 三种方法的训练与推理成本（数据来自运行日志）}}{20}{table.18}\protected@file@percent }
+\newlabel{tab:cost}{{18}{20}{三种方法的训练与推理成本（数据来自运行日志）}{table.18}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}总结与场景适用性讨论}{21}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}核心发现}{21}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}三种方法的适用场景}{21}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}个人体会}{21}{subsection.8.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {19}{\ignorespaces 三种方法的适用场景小结}}{22}{table.19}\protected@file@percent }
+\newlabel{tab:scenario}{{19}{22}{三种方法的适用场景小结}{table.19}{}}
+\bibstyle{ieeetr}
+\bibdata{reference.bib}
+\bibcite{wu2020mind}{1}
+\bibcite{joulin2017fasttext}{2}
+\bibcite{bojanowski2017enriching}{3}
+\bibcite{devlin2019bert}{4}
+\bibcite{vaswani2017attention}{5}
+\bibcite{liu2019roberta}{6}
+\bibcite{yang2024qwen2}{7}
+\bibcite{brown2020gpt3}{8}
+\gdef \@abspage@last{27}

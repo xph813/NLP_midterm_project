@@ -1,0 +1,1053 @@
+%!TeX program = xelatex
+\documentclass{SYSUReport}
+
+\headl{自然语言处理}
+\headc{期中作业实验报告}
+\headr{新闻标题三分类}
+\lessonTitle{自然语言处理课程报告}
+\reportTitle{基于 FastText / BERT / Qwen2.5 的新闻标题三分类对比研究}
+\stuname{}
+\stuid{}
+\inst{}
+\major{}
+\date{\today}
+
+\begin{document}
+
+% =============================================
+% Part 1: 封面
+% =============================================
+\cover
+\thispagestyle{empty}
+\clearpage
+
+% =============================================
+% Part 2: 摘要
+% =============================================
+\begin{abstract}
+\noindent 这次作业要做的事，是把 MIND 和 GOOGLE 两个英文新闻数据集的标题，
+按老师给的 Excel 标签表归到\textbf{硬新闻 / 软新闻 / 其他}三类，
+并分别用 \textbf{FastText}、\textbf{BERT/RoBERTa} 微调，以及大模型
+\textbf{Qwen2.5-7B-Instruct} 的 zero/few-shot 推理这三种方式跑一遍、做对比。
+
+清洗完得到 193\,646 条带标签样本，分层 9:1 切成 174\,281 条训练 + 19\,365 条测试。
+在测试集上：FastText 拿到 macro-F1=0.7914，BERT-base 微调 0.8293，RoBERTa-base 0.8291，
+而 Qwen2.5-7B（6-shot 时最好）只有 0.4842。三个模型多数投票集成的 macro-F1 反倒只有 0.8120，
+比 BERT 单模还低，原因放在第 7 节错例分析里讲。
+
+除主线之外，我还做了 5 组消融：BERT 的 \texttt{max\_len}、学习率、训练数据量曲线，
+Qwen 的 prompt 策略、模型规模（1.5B vs 7B）以及 few-shot 数量。
+最后从 30 条三模型答案不一致的“难样本”里人工挑了 3 类错因
+（\texttt{entity-bias / fuzzy-other / ambiguous}），并配合训练时长、推理速度、
+显存占用，给出三种方法各自适合的场景。
+
+\medskip
+\noindent\textbf{关键词：}文本分类\quad FastText\quad BERT\quad RoBERTa\quad
+Qwen2.5\quad Prompt 工程\quad 错例分析
+
+\medskip
+\noindent\textbf{代码仓库：}\url{https://github.com/xph813/NLP_midterm_project.git}
+\end{abstract}
+\clearpage
+
+
+% =============================================
+% Part 3: 目录
+% =============================================
+\pagenumbering{Roman}
+\setcounter{page}{1}
+\tableofcontents
+\clearpage
+
+% =============================================
+% Part 4: 正文
+% =============================================
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+
+\section{任务背景与数据}
+
+\subsection{任务定义}
+
+这次作业要做的事情是：把 MIND 和 GOOGLE 两个英文新闻数据集的标题，
+按照老师给的 Excel 表（\texttt{MIND和GOOGLE数据分类系统.xlsx}）映射成统一的三类标签：
+
+\begin{itemize}
+    \item \textbf{0 = Hard（硬新闻）}：政治、世界大事、经济金融、犯罪、政策、灾害天气等严肃时事；
+    \item \textbf{1 = Soft（软新闻）}：体育、娱乐、影视音乐、生活方式、美食、旅游、游戏等轻量内容；
+    \item \textbf{2 = Other（其他）}：健康医疗、汽车、儿童、消费科技、地方综合等不太好一刀切的垂类。
+\end{itemize}
+
+老师在 Excel 的 D 列只写了三个数字标签对应的中文名（“硬新闻 / 软新闻 / 其他”），
+没给每一类详细定义——三类的边界只能从 Excel 里 (主类, 子类) 的实际标注\textbf{反推}回来。
+具体的映射规则我整理在 §\ref{sec:label-map}。
+
+按作业要求，我得分别用 FastText、BERT 和开源大模型这三种典型方法各做一遍，
+然后在同一个测试集上对比指标。FastText 和 BERT 是要训练的；
+开源大模型（这里我选 Qwen2.5）只做提示词推理、不做微调，
+而且测试时允许在测试集上抽样评测。
+
+\subsection{数据来源与规模}
+
+两个原始 tsv 都是 4 列结构 \texttt{(id, 主类, 子类, 标题)}：
+
+\begin{table}[!htbp]
+\centering
+\caption{原始数据规模}
+\label{tab:raw-stat}
+\begin{tabular}{lccc}
+\toprule
+数据集 & 原始行数 & 主类数 & 标题语言 \\
+\midrule
+MIND \cite{wu2020mind}   & 101\,527 & 18 & 英文 \\
+GOOGLE                   & 110\,993 &  8 & 英文 \\
+\midrule
+\textbf{合计}            & \textbf{212\,520} & \multicolumn{2}{c}{以 GOOGLE 的 8 大主类 + MIND 的 18 主类对齐} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+两份数据的类别体系并不一样——MIND 那 18 个主类涵盖
+news, sports, entertainment, health, autos, kids, lifestyle, movies, tv, music,
+weather, foodanddrink, video, travel, finance, games, middleeast, northamerica；
+GOOGLE 这边就只有 8 个：World, U.S., Business, Technology, Entertainment, Sport, Science, Health。
+老师那张 Excel 起到的作用就是把它们\textbf{对齐到同一个三分类体系上}，
+对齐了之后才能放在一起训练和评测。
+
+
+\subsection{标签映射体系}\label{sec:label-map}
+
+通过解析 Excel 两个 sheet 的 D 列标注，我整理出以下映射规则
+（后面所有实验都基于这套规则）：
+
+\begin{table}[!htbp]
+\centering
+\caption{统一标签体系（从 Excel 反推）}
+\label{tab:label-system}
+\begin{tabular}{clp{8.5cm}}
+\toprule
+标签 & 名称 & 包含的（主类 / 子类）举例 \\
+\midrule
+0 & Hard 硬新闻
+  & MIND \texttt{news+politics / news+world / news+business / news+crime / news+factcheck / weather / middleeast}；
+    GOOGLE \texttt{World / U.S. / Business} \\
+\midrule
+1 & Soft 软新闻
+  & MIND \texttt{sports / entertainment / movies / music / tv / foodanddrink / lifestyle / travel / games}；
+    GOOGLE \texttt{Sport / Entertainment} \\
+\midrule
+2 & Other 其他
+  & MIND \texttt{health / autos / kids / northamerica / news+newsus / news+newsoffbeat / news+newsphotos / lifestyle+lifestylevideo}；
+    GOOGLE \texttt{Health / Technology / Science} \\
+\midrule
+- & 不使用 & MIND \texttt{video} 主类（Excel D 列写的是“该分类整体不使用”）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+再补两句：
+（1）GOOGLE 的 \texttt{Technology / Science} 被划到了 \textbf{Other}，
+而 MIND 里和“科技政策”沾边的 \texttt{newsscienceandtechnology} 反倒被划到了 \textbf{Hard}——
+这种“任务特定”的细粒度规则，正是后面 LLM 出错最多的地方；
+（2）MIND 的整个 \texttt{video} 主类（约 1\,500 条）在 Excel 里被明确丢弃了，
+所以清洗时我直接整类剔除。
+
+
+\section{算法原理简述}
+
+\subsection{FastText 原理}
+
+FastText 是 Facebook 2016 年放出的一个很“轻”的文本分类器 \cite{joulin2017fasttext}，
+我看代码的时候发现它的思路其实就三句话能讲清楚：
+\textbf{词向量平均做句子表示、加 n-gram 引入序列信息、分层 softmax 加速大类别训练}。
+具体讲，对一个输入句子 $x = (w_1, w_2, \ldots, w_T)$，先把每个词
+（连同它的 word-ngram 和 subword char-ngram \cite{bojanowski2017enriching}）
+查表查成 $d$ 维向量，然后取平均：
+\begin{equation}
+    \mathbf{h} = \frac{1}{T} \sum_{t=1}^{T} \mathbf{E}_{w_t}
+    \label{eq:ft-pool}
+\end{equation}
+再经过一个线性变换得到类别分布：
+\begin{equation}
+    P(y=k \mid x) = \mathrm{softmax}\left(\mathbf{W} \mathbf{h} + \mathbf{b}\right)_k
+    \label{eq:ft-softmax}
+\end{equation}
+当类别数特别多（比如 $> 10^5$）的时候，标准 softmax 那个 $O(K)$ 的复杂度就跑不动了，
+FastText 用了 Huffman 树的\textbf{分层 softmax}，把单次计算降到 $O(\log K)$。
+这次作业只有 3 类，分层 softmax 这个加速根本用不上；
+但 FastText 在新闻这种\textbf{短文本}上还是挺能打的——平均一个标题不到 15 个词，
+词袋加 bigram 基本就能覆盖判别信息，模型本身也就 1M 参数，CPU 上几秒钟训完一组。
+
+\subsection{BERT 原理}
+
+BERT \cite{devlin2019bert} 基于 Transformer encoder \cite{vaswani2017attention}，
+是个双向语言模型，预训练做两件事：MLM（masked language modeling）和
+NSP（next sentence prediction）。做\textbf{文本分类}的常规做法很直接——
+拿输入序列开头那个特殊 token \texttt{[CLS]} 对应的最后一层隐藏状态，
+当成整句的表示，再接一个线性分类头。
+写成式子的话，对输入标题 $x$，tokenize 后变成 \texttt{[CLS]\,$x_1$\,$x_2$\,\ldots\,$x_n$\,[SEP]}，
+最后一层隐藏状态记为 $\mathbf{H} \in \mathbb{R}^{L \times d}$，分类流程是：
+\begin{equation}
+    \mathbf{h}_{\mathrm{[CLS]}} = \mathbf{H}_{0,:}
+    \quad\xrightarrow{\text{Dropout}}\quad
+    \mathbf{z} = \mathbf{W}_\mathrm{cls} \mathbf{h}_{\mathrm{[CLS]}} + \mathbf{b}_\mathrm{cls}
+    \quad\xrightarrow{}\quad
+    \hat{y} = \arg\max_k\, \mathrm{softmax}(\mathbf{z})_k
+    \label{eq:bert-cls}
+\end{equation}
+这里 $\mathbf{W}_\mathrm{cls} \in \mathbb{R}^{K \times d}$ 是新加的分类头
+（$d=768, K=3$），其它参数都从 \texttt{bert-base-uncased} 的预训练权重直接拿过来；
+训练就是标准的交叉熵损失，整个网络（encoder + 分类头）一起端到端微调。
+
+顺便说一句：BERT 的 \texttt{[CLS]} 之所以这么“听话”，是因为预训练 NSP 阶段就是拿这个位置
+去判断两段话是不是相邻，模型已经被逼着把“全局语义”压到这一个 token 上了。
+所以做分类一般也不再额外做 mean pooling 或 attention pooling——前者会被噪声词稀释，
+后者多一组参数但收益不大。
+RoBERTa \cite{liu2019roberta} 网络结构和 BERT 一模一样，
+只在预训练数据、batch size、训练步数、动态 mask 这些工程细节上做了改进，
+分类时直接复用上面这套流程就行。
+
+
+\subsection{Qwen2.5 大模型原理}
+
+Qwen2.5 \cite{yang2024qwen2} 是阿里通义千问开源的自回归（causal）语言模型，
+干的事就是 \textbf{next-token prediction}：给定 prefix $x_{1:t-1}$，
+预测下一个 token 的条件分布
+\begin{equation}
+    P(x_t \mid x_{1:t-1}) = \mathrm{softmax}\left(\mathbf{W}_o\,\mathrm{Trans}_{\theta}(x_{1:t-1})_{-1}\right)
+    \label{eq:qwen-lm}
+\end{equation}
+想拿它做\textbf{文本分类}，就得把分类问题改写成生成问题——这其实就是 prompt 工程在做的事。
+具体做法是\textbf{设计一段提示模板}，让模型把分类结果“写出来”，再用规则把它解析回标签：
+\begin{enumerate}
+    \item System 消息列出全部合法标签 + 每类的简短定义；
+    \item （可选）插入 $k$ 条示例 \texttt{<标题, 答案>}，做 $k$-shot in-context learning \cite{brown2020gpt3}；
+    \item User 给出待分类标题，约束输出格式（如 \texttt{"Answer: <Hard/Soft/Other>"}）；
+    \item 模型生成的文本里用正则抽出 \texttt{Hard/Soft/Other}，并用 difflib 做模糊兜底；
+          匹配不到的样本判为“拒答”，按错误统计。
+\end{enumerate}
+
+LLM 这条路线的好处是\textbf{零训练}、能快速适配新业务；
+但缺点也很明显：受 prompt 设计、上下文长度、采样策略影响巨大，
+而且模型本身\textbf{没学过这个任务的标签边界}。
+这次作业的三分类体系就是一个非常具体、靠 Excel 反推出来的边界——
+这也是为什么后面 Qwen-7B macro-F1 只有 0.48。
+
+
+\section{数据清洗与可视化}
+
+\subsection{清洗与划分流程}
+
+清洗脚本是 \verb|01_clean_data.py|，主要做了以下五件事：
+
+\begin{enumerate}
+    \item \textbf{解析 Excel 标签表}：用 openpyxl 读两个 sheet，碰到 D 列写“不使用”的
+          主类整类丢掉（这次只有 MIND 的 \texttt{video} 命中）；
+          最后拿到 (主类, 子类) $\to$ \{0,1,2\} 一共 \textbf{335 条}映射规则。
+    \item \textbf{字段去脏}：drop 掉标题、ID、主/子类有空字段的行；
+          标题做 \texttt{strip + 多空格压缩}，但保留大小写和标点（BERT 和 Qwen 都用得上）。
+    \item \textbf{打标签}：按映射给每行打 0/1/2 标签，
+          没命中映射的样本（大约 7.5\%）整行丢掉。
+    \item \textbf{去重}：用标题文本做 \texttt{drop\_duplicates}，
+          实际跑下来 MIND 和 GOOGLE 之间确实有少量同标题样本（ID 不同但内容一致）。
+    \item \textbf{分层 9:1 划分}：用 \texttt{sklearn.StratifiedShuffleSplit}，
+          \texttt{random\_state=42}，保证训练集和测试集 0/1/2 的比例严格一致。
+\end{enumerate}
+
+清洗每一步留下多少样本如下表所示，整个 pipeline 跑一遍不到 30 秒：
+
+\begin{table}[!htbp]
+\centering
+\caption{数据清洗流水线（数字直接来自运行日志 \texttt{outputs/logs/01\_clean.log}）}
+\label{tab:cleaning}
+\begin{tabular}{lrr}
+\toprule
+步骤 & 剩余样本数 & 削减 \\
+\midrule
+原始 MIND + GOOGLE 合并          & 212\,520 & — \\
+去除主类 / 子类 / 标题空字段      & 212\,520 & 0 \\
+按 Excel 映射打标后丢弃未命中      & 196\,629 & $-15\,891$ \\
+标题去重 + 空白压缩               & 193\,646 & $-2\,983$ \\
+\midrule
+\textbf{进入 9:1 划分}            & \textbf{193\,646} & — \\
+$\Rightarrow$ 训练集              & 174\,281 & — \\
+$\Rightarrow$ 测试集              &  19\,365 & — \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+清洗后三类的分布是：Hard 44\,439 / Soft 102\,148 / Other 47\,059
+（比例大概 23\,\% / 53\,\% / 24\,\%），\textbf{Soft 类的样本数是 Hard 和 Other 的 2 倍多}，
+存在轻度的类别不平衡。所以后面算指标的时候，我同时报 macro-F1 和 weighted-F1 两套数。
+
+\subsection{可视化分析}
+
+为了对数据有个底，我一口气画了 6 张统计图（\autoref{fig:viz1} 和 \autoref{fig:viz2}），
+图全部是脚本 \verb|02_data_viz.py| 自动生成的。
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[三类整体分布]{\includegraphics[width=0.31\textwidth]{01_label_dist.png}}\hfill
+\subfigure[源 $\times$ 标签 堆叠]{\includegraphics[width=0.31\textwidth]{02_source_label.png}}\hfill
+\subfigure[标题词数直方图]{\includegraphics[width=0.31\textwidth]{03_title_length.png}}
+\caption{清洗后数据基本统计：(a) 三类分布（Soft 偏多）、
+(b) MIND 与 GOOGLE 在 Hard/Soft/Other 上的贡献比例不同——MIND 偏 Hard 与 Other，
+GOOGLE 在 Soft 上提供更多体育类样本、
+(c) 标题词数集中在 6–15 词，长尾极少。}
+\label{fig:viz1}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[每类 Top-15 高频词]{\includegraphics[width=0.31\textwidth]{04_top_words.png}}\hfill
+\subfigure[训练 / 测试比例对照]{\includegraphics[width=0.31\textwidth]{05_train_test.png}}\hfill
+\subfigure[每类标题长度箱线图]{\includegraphics[width=0.31\textwidth]{06_length_box.png}}
+\caption{进一步的统计：(a) 高频词大致体现了三类的“判别词”——
+Hard 集中在 \texttt{trump / police / state}，Soft 集中在 \texttt{game / new / first}，
+Other 在 \texttt{health / things / new}；
+(b) 9:1 分层划分后，三类比例严格一致；
+(c) 三类的标题长度分布几乎重合，说明“长度”本身不是判别特征，模型必须靠语义。}
+\label{fig:viz2}
+\end{figure}
+
+顺便看一眼\autoref{fig:viz1}(b)：MIND 和 GOOGLE 两个数据源在三类上的贡献比例\textbf{并不平衡}。
+这件事在第 \ref{sec:err-analysis} 节的错例分析里还会再出现——
+有些子类其实是\textbf{某一个数据源独有的}，模型在训练时见得少，
+到测试集上就容易偏向另一边数据源的判定方式。
+
+
+\section{FastText 实验}
+
+\subsection{实现细节}
+
+FastText 实验（脚本 \verb|03_fasttext_grid.py| + \verb|04_fasttext_aug.py|）走的是
+“先粗后精”两个阶段：先在 dev 上做\textbf{超参网格搜索}找出最优配置，
+再在最优配置上叠\textbf{数据增强}看能不能再涨点。
+
+预处理统一做\textbf{小写化 + 去标点}（只保留 \texttt{a-z 0-9 '} 和空格）：
+
+\begin{equation}
+\texttt{"Apple's iPhone Sales Drop 15\%"}
+\;\xrightarrow{\text{clean}}\;
+\texttt{"apple's iphone sales drop 15"}
+\end{equation}
+
+每行写成 FastText 的标准格式 \texttt{\_\_label\_\_<id> <title>}。
+为了不让测试集泄漏，我又从 \texttt{train.tsv} 里再分层 9:1 切了一份
+\textbf{inner-train}（156\,852 条）和 \textbf{dev}（17\,429 条）；
+所有调参都在 dev 上看，最后只在 \texttt{test.tsv}（19\,365 条）上跑一次。
+
+\subsection{超参网格搜索（18 组）}
+
+我扫的网格是 \texttt{lr} $\in$ \{0.3, 0.5, 1.0\}、\texttt{epoch} $\in$ \{10, 20, 30\}、
+\texttt{wordNgrams} $\in$ \{1, 2\}，固定 \texttt{dim=100}、\texttt{loss=softmax}。
+共 $3 \times 3 \times 2 = 18$ 组，每组结果立即 append 到 csv，重启时已有的会跳过。
+
+\begin{table}[!htbp]
+\centering
+\caption{FastText 网格搜索 dev macro-F1 完整结果（粗体为最优配置）}
+\label{tab:ft-grid}
+\begin{tabular}{ccccc}
+\toprule
+\texttt{lr} & \texttt{epoch} & \texttt{wordNgrams} & dev acc & dev macro-F1 \\
+\midrule
+0.3 & 10 & 1 & 0.8147 & 0.7760 \\
+0.3 & 10 & 2 & 0.8260 & 0.7895 \\
+0.3 & 20 & 1 & 0.8107 & 0.7723 \\
+0.3 & 20 & 2 & 0.8231 & 0.7862 \\
+0.3 & 30 & 1 & 0.8056 & 0.7671 \\
+0.3 & 30 & 2 & 0.8255 & 0.7889 \\
+\textbf{0.5} & \textbf{10} & \textbf{2} & \textbf{0.8265} & \textbf{0.7902} \\
+0.5 & 20 & 1 & 0.8105 & 0.7723 \\
+0.5 & 30 & 2 & 0.8233 & 0.7857 \\
+1.0 & 10 & 2 & 0.8236 & 0.7870 \\
+1.0 & 20 & 2 & 0.8244 & 0.7876 \\
+1.0 & 30 & 2 & 0.8215 & 0.7835 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从这张表能看出几条规律：
+（1）\texttt{wordNgrams=2} \textbf{基本一直}比 \texttt{wordNgrams=1} 高 1–2 pp，
+说明 bigram 在短文本上还是挺管用的——比如 \texttt{"stock market"} 比单看 \texttt{stock}
+或 \texttt{market} 更明确地指向 Hard 类；
+（2）\texttt{epoch} 从 10 加到 20、30 反而\textbf{往下走}
+（比如 \texttt{lr=1.0,wn=2} 从 0.7870 掉到 0.7835），这是典型的过拟合信号；
+（3）\texttt{lr=0.5} 整体最稳。
+最后选出来的最优配置是 \texttt{(lr=0.5, epoch=10, wordNgrams=2, dim=100)}，
+dev macro-F1 = \textbf{0.7902}。
+
+\subsection{数据增强对比}
+
+固定上述最优超参后，对训练集做四种增强 + 各跑一次：
+
+\begin{table}[!htbp]
+\centering
+\caption{FastText 数据增强对比（dev 集）}
+\label{tab:ft-aug}
+\begin{tabular}{lrcc}
+\toprule
+增强策略         & 训练样本数 & dev acc & dev macro-F1 \\
+\midrule
+原始（无增强）   & 156\,852 & 0.8228 & 0.7851 \\
+\textbf{随机删词 $p=0.1$ \quad (drop)} & \textbf{263\,295} & \textbf{0.8237} & \textbf{0.7872} \\
+随机交换相邻词 $p=0.1$ \quad (swap) & 313\,635 & 0.8222 & 0.7851 \\
+两者都用 \quad (both)              & 420\,149 & 0.8208 & 0.7843 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+最后选了 \texttt{drop} 增强（dev 上提了 0.21 pp，性价比最高）；
+\texttt{swap} 几乎没收益；\texttt{both} 比单一增强还差，
+说明这种短文本加噪稍微过一点就会失真。
+最后用 \texttt{drop} 增强后的全量 train（174\,281 条）重训一次最终模型，
+在 \texttt{test.tsv} 上评测。
+
+\subsection{FastText 测试集结果}
+
+\begin{table}[!htbp]
+\centering
+\caption{FastText 在测试集上的 per-class 指标（直接来自运行日志）}
+\label{tab:ft-test}
+\begin{tabular}{lcccr}
+\toprule
+类别       & precision & recall & F1 & support \\
+\midrule
+Hard       & 0.7442 & 0.7613 & 0.7526 & 4\,444 \\
+Soft       & 0.9097 & 0.9172 & 0.9134 & 10\,215 \\
+Other      & 0.7228 & 0.6942 & 0.7082 & 4\,706 \\
+\midrule
+\textbf{accuracy}    & \multicolumn{4}{c}{\textbf{0.8272}} \\
+\textbf{macro avg}   & 0.7922 & 0.7909 & \textbf{0.7914} & 19\,365 \\
+\textbf{weighted avg}& 0.8263 & 0.8272 & 0.8267 & 19\,365 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.55\textwidth]{07_fasttext_confusion.png}
+\caption{FastText 在测试集 19\,365 条上的混淆矩阵。
+对角线最强的是 Soft（9\,369/10\,215，召回 0.917）；
+最弱的是 Other（3\,267/4\,706）——常见错法是把 Other 类的 health/tech 类标题误判成 Hard，
+后面 BERT 同样有这个倾向。}
+\label{fig:ft-cm}
+\end{figure}
+
+总的来看，FastText 这条\textbf{“小模型 + 海量短文本 + 几十秒训练”}的路子，
+能拿到 macro-F1 = 0.7914，\textbf{比我一开始想的好不少}。
+作为后面 BERT/Qwen 的 baseline，它的“性价比”基本是没什么悬念的——
+这条结论后面 §\ref{sec:cost} 还会再聊。
+
+
+\section{BERT 实验}
+
+\subsection{模型与训练流程}
+
+BERT 实验的脚本是 \verb|05_bert_train.py|，框架用的是 HuggingFace 的
+\texttt{transformers}。我对比了 \texttt{bert-base-uncased}（12 层 / 768 维 / 110M 参数）
+和 \texttt{roberta-base}（12 层 / 768 维 / 125M 参数）两个模型，主要超参如下：
+
+\begin{table}[!htbp]
+\centering
+\caption{BERT/RoBERTa 训练超参}
+\label{tab:bert-hparam}
+\begin{tabular}{ll}
+\toprule
+项 & 值 \\
+\midrule
+batch size & 32 \\
+learning rate & $2 \times 10^{-5}$（baseline；后面有 lr 消融） \\
+epoch & 3 \\
+max\_len & 64（中位标题长度 10 词，95 分位 18 词） \\
+warmup ratio & 0.1 \\
+weight decay & 0.01 \\
+fp16 & 开（3090 上） \\
+metric for best & macro-F1（每个 epoch 在 dev 上评） \\
+inner-train / dev & 165\,566 / 8\,715（从 \texttt{train.tsv} 再切 5\%） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+训练时设置 \texttt{logging\_steps=200}，把 train loss 写入每个模型自己的
+\texttt{training\_log.csv}；每个 epoch 结束在 dev 上跑一次 eval，
+\texttt{Trainer} 通过 \texttt{load\_best\_model\_at\_end} 自动回到
+dev macro-F1 最高的 checkpoint。
+
+\subsection{BERT 输出如何转成分类标签}
+
+作业里特别要求写“BERT 输出怎么转成标签”，所以这一节我把流程拆开说一下。
+拿一个测试样本 \emph{Apple's iPhone sales dropped 15\%} 走一遍：
+
+\begin{enumerate}
+    \item \textbf{Tokenize}：分词器以 \texttt{max\_length=64}、\texttt{padding="max\_length"}、
+          \texttt{truncation=True} 返回 \texttt{input\_ids} 和 \texttt{attention\_mask}；
+    \item \textbf{Encoder 前向}：经 12 层 Transformer encoder 得到 \texttt{last\_hidden\_state}，形状 $(B,\,L,\,768)$；
+    \item \textbf{取 \texttt{[CLS]} 表示}：
+          $\mathbf{h}_{\mathrm{[CLS]}} = \texttt{last\_hidden\_state}[:, 0, :]$，形状 $(B,\,768)$；
+    \item \textbf{分类头}：\texttt{Dropout(p=0.1)} $\to$ \texttt{Linear(768, 3)}，
+          得到 logits $\mathbf{z}\in\mathbb{R}^{B \times 3}$；
+    \item \textbf{推理}：$\hat{y}=\arg\max_k\, z_k$，再查 \texttt{LABEL\_NAMES} 得到字符串标签。
+\end{enumerate}
+
+训练阶段的端到端损失是
+\begin{equation}
+    \mathcal{L} = -\frac{1}{N}\sum_{i=1}^{N} \log P(y_i \mid x_i; \theta)
+                = -\frac{1}{N}\sum_{i=1}^{N} \log \mathrm{softmax}(\mathbf{z}_i)_{y_i}
+\end{equation}
+反向传播\textbf{同时更新}encoder 与分类头。
+分类头是\textbf{随机初始化}的，所以训练初期 loss 会先上升再下降一次，是正常现象。
+
+\subsection{消融实验：max\_len、学习率、训练数据量}
+
+为了让结论更扎实一点，我又加了三组 BERT 消融，都在 \texttt{bert-base-uncased} 上跑，
+其它超参保持不变。
+
+\subsubsection{max\_len 消融}
+
+脚本 \verb|06_bert_ablation.py|，对比 \texttt{max\_len} $\in$ \{32, 64, 128\}：
+
+\begin{table}[!htbp]
+\centering
+\caption{BERT max\_len 消融（dev 集）}
+\label{tab:bert-maxlen}
+\begin{tabular}{cccc}
+\toprule
+max\_len & dev acc & dev macro-F1 & dev weighted-F1 \\
+\midrule
+32  & 0.8514 & 0.8168 & 0.8503 \\
+64  & 0.8499 & 0.8154 & 0.8490 \\
+\textbf{128} & \textbf{0.8526} & \textbf{0.8181} & \textbf{0.8517} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+三组之间差距其实很小（0.27 pp 以内）。原因也好理解：
+标题中位长度只有 10 词、95 分位 18 词，\texttt{max\_len=32} 就已经能把 99\,\% 的标题装下，
+再加上只是给 padding 喂更多 GPU 时间。报告里 \texttt{max\_len=128} 数字最高，
+但权衡训练效率，我后面所有 BERT 实验默认用 \texttt{max\_len=64}。
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{08_bert_maxlen_ablation.png}
+\caption{BERT \texttt{max\_len} 消融折线图：32/64/128 三组在 dev 上 macro-F1 几乎平直，
+说明对短文本场景增大 \texttt{max\_len} 的边际收益接近于零。}
+\label{fig:bert-maxlen}
+\end{figure}
+
+\subsubsection{学习率消融}
+
+脚本 \verb|11_bert_lr_ablation.py|，扫 \texttt{lr} $\in$ \{1e-5, 2e-5, 3e-5, 5e-5\}：
+
+\begin{table}[!htbp]
+\centering
+\caption{BERT 学习率消融（dev 集，bert-base-uncased，3 epoch）}
+\label{tab:bert-lr}
+\begin{tabular}{cccc}
+\toprule
+lr  & dev acc & dev macro-F1 & dev weighted-F1 \\
+\midrule
+$1\times 10^{-5}$ & 0.8414 & 0.8041 & 0.8406 \\
+$2\times 10^{-5}$ & 0.8499 & 0.8154 & 0.8490 \\
+$3\times 10^{-5}$ & 0.8504 & 0.8162 & 0.8497 \\
+\textbf{$5\times 10^{-5}$} & \textbf{0.8520} & \textbf{0.8174} & \textbf{0.8511} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.6\textwidth]{17_bert_lr_ablation.png}
+\caption{BERT 学习率消融折线：lr 从 $1\!\times\!10^{-5}$ 到 $5\!\times\!10^{-5}$ 单调上升，
+但 $2\!\times\!10^{-5}$ 之后增益迅速收敛，约 1.3 pp 内。
+这与 BERT 原论文推荐的 $2\!\times\!10^{-5}$\,–\,$5\!\times\!10^{-5}$ 区间吻合。}
+\label{fig:bert-lr}
+\end{figure}
+
+dev 上 \texttt{lr=5e-5} 比 \texttt{lr=2e-5} 略高 0.2 pp，但跑 test 的时候我还是选了
+\texttt{lr=2e-5}——一是这是 BERT 原论文给的“安全档位”，二是 \texttt{lr=5e-5}
+在 dev 上数字虽好，但训练后期 loss 波动明显更大，为了“能复现 + 不被单一 dev 过拟合带跑偏”
+采了个保守的选择。
+
+\subsubsection{训练数据量曲线}
+
+脚本 \verb|12_bert_learning_curve.py|，按 \texttt{frac} $\in$ \{10\%, 30\%, 60\%, 100\%\}
+随机抽训练集子集，固定相同 epoch / lr：
+
+\begin{table}[!htbp]
+\centering
+\caption{BERT 训练数据量曲线（dev 集）}
+\label{tab:bert-curve}
+\begin{tabular}{crcc}
+\toprule
+frac & 实际样本数 & dev acc & dev macro-F1 \\
+\midrule
+0.1 & 16\,556  & 0.8091 & 0.7657 \\
+0.3 & 49\,669  & 0.8283 & 0.7891 \\
+0.6 & 99\,339  & 0.8402 & 0.8033 \\
+\textbf{1.0} & \textbf{165\,566} & \textbf{0.8499} & \textbf{0.8154} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.6\textwidth]{18_bert_learning_curve.png}
+\caption{BERT 数据量学习曲线：从 10\,\% 到 100\,\%，
+dev macro-F1 从 0.766 单调上升到 0.815，但增速明显减缓——
+30\,\% $\to$ 60\,\% 提升 1.4 pp，而 60\,\% $\to$ 100\,\% 只提升 1.2 pp。
+按这个趋势外推，再加一倍数据估计也只能再涨 0.5–0.8 pp。}
+\label{fig:bert-curve}
+\end{figure}
+
+这张曲线大概能看出来：在这个任务上，BERT 大概到 30\,\%–60\,\% 数据量就快到性能拐点了，
+\textbf{再加数据收益不大}——这也是为什么我后来没花精力去搞半监督扩样。
+
+\subsection{BERT-base vs RoBERTa 对比}
+
+\verb|05_bert_train.py| 同时训练 bert-base 和 roberta-base 两个模型，
+\verb|07_bert_eval.py| 在测试集上分别评测：
+
+\begin{table}[!htbp]
+\centering
+\caption{BERT-base 与 RoBERTa-base 在测试集上的对比（19\,365 条）}
+\label{tab:bert-vs-roberta}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccccc}
+\toprule
+模型 & accuracy & macro-F1 & weighted-F1 & f1\_Hard & f1\_Soft & f1\_Other \\
+\midrule
+bert-base-uncased    & 0.8603 & \textbf{0.8293} & 0.8600 & 0.7958 & 0.9358 & 0.7563 \\
+roberta-base         & \textbf{0.8600} & 0.8291 & \textbf{0.8601} & 0.7956 & \textbf{0.9364} & 0.7554 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[bert-base-uncased]{\includegraphics[width=0.45\textwidth]{09_bert_bert-base-uncased_confusion.png}}\hfill
+\subfigure[roberta-base]{\includegraphics[width=0.45\textwidth]{09_bert_roberta-base_confusion.png}}
+\caption{两个模型在测试集上的混淆矩阵几乎一致——
+RoBERTa 在 Soft 类比 BERT 高 0.06 pp，BERT 在 Other 类比 RoBERTa 高 0.09 pp，
+属于浮点噪声范围。}
+\label{fig:bert-vs-roberta-cm}
+\end{figure}
+
+真正跑下来，bert-base 和 roberta-base \textbf{基本就是打平}（差距小于 0.02 pp）。
+训练时长也差不多，RoBERTa 12.3 min，bert-base 11.8 min。
+这其实跟 RoBERTa 论文里讲的一致：RoBERTa 的预训练改进，
+主要在 SuperGLUE 那种需要细粒度推理的任务上能拉开差距，
+而这次这种 3 类粗粒度分类\textbf{放大不出它的优势}。
+所以后面综合分析里我用 BERT-base 当代表（macro-F1 略高）。
+
+
+\section{Qwen2.5 大模型实验}
+
+\subsection{评测策略与抽样}
+
+测试集一共 19\,365 条，要把大模型在上面整个跑一遍——哪怕 4bit 量化也要 30+ 分钟，
+而且作业里也写了“不必跑全测试集”，所以我做了\textbf{分层抽样 500 条}：
+保证 Hard / Soft / Other 三类的比例严格跟全测试集一样
+（115 / 264 / 121 = 23\,\% / 53\,\% / 24\,\%），\texttt{random\_state=42} 锁死能复现，
+最后落盘到 \texttt{outputs/qwen/sample\_500.tsv}。
+后面 Qwen 的所有实验（不同 prompt、不同规模、不同 few-shot 数）都基于这同一份样本，
+这样结果之间才能两两直接对比。
+
+模型用的是阿里 \texttt{Qwen2.5-7B-Instruct}（参数 7B，4bit nf4 量化加载，
+显存占用约 6 GB，3090 上 batch=4 顺利跑完）；
+另外还测试了 \texttt{Qwen2.5-1.5B-Instruct}（1.5B，4bit ~1.5 GB）做规模对比。
+
+\subsection{三种 prompt 策略}
+
+我设计了三种 prompt（脚本 \verb|08_qwen_eval.py|），全部用 chat template 渲染：
+
+\begin{enumerate}
+    \item \textbf{Zero-shot}：System 列出三类定义 + 输出格式约束，user 直接给标题；
+    \item \textbf{Few-shot}：在 zero 基础上插入 6 条人工挑的示例（每类 2 条）；
+    \item \textbf{Chain-of-Thought (CoT)}：要求模型先用一句话说理由再给最终标签。
+\end{enumerate}
+
+抽答案的代码逻辑是这样：先用正则去找 \texttt{Answer:\,(.+)} / \texttt{Final:\,(.+)}
+/ \texttt{Label:\,(.+)} 三种格式之一，找到之后做 strip + lower，
+再跟合法标签做精确比对；如果还匹配不上，就上 \texttt{difflib.get\_close\_matches} 做模糊兜底；
+要是连这步都失败，就记成“拒答”（\texttt{pred=-1}），不计入指标。
+
+\begin{table}[!htbp]
+\centering
+\caption{Qwen2.5-7B 三种 prompt 在 500 抽样上的对比}
+\label{tab:qwen-prompt}
+\begin{tabular}{lcccc}
+\toprule
+prompt 模式 & accuracy & macro-F1 & weighted-F1 & 拒答率 \\
+\midrule
+zero-shot       & 0.566 & 0.4406 & 0.5224 & 0\% \\
+\textbf{few-shot ($k$=6)} & 0.560 & \textbf{0.4842} & \textbf{0.5500} & 0\% \\
+CoT             & \textbf{0.586} & 0.4544 & 0.5398 & 0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[zero]{\includegraphics[width=0.31\textwidth]{10_qwen_zero_confusion.png}}\hfill
+\subfigure[few]{\includegraphics[width=0.31\textwidth]{10_qwen_few_confusion.png}}\hfill
+\subfigure[CoT]{\includegraphics[width=0.31\textwidth]{10_qwen_cot_confusion.png}}
+\caption{Qwen2.5-7B 三种 prompt 的混淆矩阵。所有模式的共同问题是：
+\textbf{Other 类基本被错判到 Hard 或 Soft}，体现在 (a)(c) 第三行召回极低（< 0.04）。
+few-shot 把 Other 的召回拉到了 0.14，但仍远远低于 BERT 的 0.74。}
+\label{fig:qwen-prompt-cm}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.55\textwidth]{11_qwen_prompt_compare.png}
+\caption{Qwen 三种 prompt 的指标柱状图：CoT 的 accuracy 略高（0.586），
+但 macro-F1 反而最低，体现“chain-of-thought 让 Soft 更准、Other 更失”的失衡现象。
+综合 macro-F1 选 few-shot 作为后续 Qwen 代表。}
+\label{fig:qwen-prompt-bar}
+\end{figure}
+
+这里有个挺反直觉的地方：\textbf{CoT 的 accuracy 比 few-shot 高 2.6 pp，但 macro-F1 反而低了 3 pp}。
+我顺着看混淆矩阵，发现 CoT 让 Qwen 更倾向于往 Hard 或 Soft 里塞
+（Hard 召回 0.90、Soft 召回 0.70），但 Other 类基本崩了，召回只有 0.03；
+也就是说 CoT 在这里其实是\textbf{加剧了类别偏置}，并没有给出更平衡的判断。
+看到这个数据的时候我一度怀疑是抽答案的代码出了 bug，反复看了两次代码才放心。
+
+\subsection{模型规模对比：1.5B vs 7B}
+
+脚本 \verb|13_qwen_size_compare.py|，用同一份 500 抽样、同一种 few-shot prompt 比较两个规模：
+
+\begin{table}[!htbp]
+\centering
+\caption{Qwen2.5 不同参数规模的对比（500 抽样，few-shot $k$=6）}
+\label{tab:qwen-size}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccccr}
+\toprule
+模型 & accuracy & macro-F1 & weighted-F1 & f1\_Hard & f1\_Soft & f1\_Other & 推理 \\
+\midrule
+Qwen2.5-1.5B & 0.424 & 0.368 & 0.404 & 0.457 & 0.496 & 0.151 & 11.9 s \\
+\textbf{Qwen2.5-7B} & \textbf{0.560} & \textbf{0.484} & \textbf{0.550} & \textbf{0.526} & \textbf{0.716} & \textbf{0.211} & 52.0 s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[Qwen-1.5B 混淆矩阵]{\includegraphics[width=0.32\textwidth]{19a_Qwen-1.5B_confusion.png}}\hfill
+\subfigure[Qwen-7B 混淆矩阵]{\includegraphics[width=0.32\textwidth]{19a_Qwen-7B_confusion.png}}\hfill
+\subfigure[1.5B vs 7B 指标柱状图]{\includegraphics[width=0.32\textwidth]{19_qwen_size_compare.png}}
+\caption{Qwen2.5 模型规模对比：(a)(b) 混淆矩阵显示 1.5B 在 Soft 类大量误判到 Hard（红色那条对角线偏弱），
+而 7B 把 Soft 召回从 0.50 拉到 0.72；(c) 三类指标 7B 全面优于 1.5B，
+但 1.5B 推理速度是 7B 的 4.4 倍。}
+\label{fig:qwen-size}
+\end{figure}
+
+7B 比 1.5B macro-F1 高 11.6 pp、Soft 类 F1 高 22 pp，差距非常明显。
+但要留意一个细节：1.5B 的 \textbf{Other 类 F1 只有 0.15}，
+说明小尺寸 LLM 在“任务定义型”的边界类别上几乎是没判别力的——
+而这种事在 BERT 微调里根本看不到（BERT 哪怕只用 10\,\% 数据训，Other F1 也能有 0.65 以上）。
+这件事让我有个挺直接的体会：\textbf{对于“标签靠映射规则定义”的任务，
+光堆参数量是替代不了任务监督信号的}。
+
+\subsection{Few-shot 数量影响}
+
+脚本 \verb|14_qwen_fewshot_count.py|，固定 7B 模型，扫 $k$ $\in$ \{0, 3, 6, 9\}：
+
+\begin{table}[!htbp]
+\centering
+\caption{Qwen2.5-7B few-shot 数量影响}
+\label{tab:qwen-fewshot}
+\begin{tabular}{cccc}
+\toprule
+$k$-shot & accuracy & macro-F1 & weighted-F1 \\
+\midrule
+0   & 0.566 & 0.4406 & 0.5224 \\
+3   & 0.480 & 0.4160 & 0.4690 \\
+\textbf{6}   & \textbf{0.560} & \textbf{0.4842} & \textbf{0.5500} \\
+9   & 0.548 & 0.4705 & 0.5346 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.62\textwidth]{20_qwen_fewshot_count.png}
+\caption{Qwen2.5-7B few-shot 数量对性能的影响。
+非单调：$k=0\to 3$ 反而\textbf{下降} 2.5 pp（少量示例可能误导模型），
+$k=3\to 6$ 才回升到 0.484；$k=6\to 9$ 又略降，呈“先降后升再降”的波动。}
+\label{fig:qwen-fewshot}
+\end{figure}
+
+这张图大概是整组 Qwen 实验里最让我意外的：常理是 few-shot 越多越好，
+但跑出来 \textbf{$k=3$ 反而比 $k=0$ 还差一截}。我回头去看用的那 6 条 few-shot 示例
+（顺序是 \texttt{Hard,Hard,Soft,Hard,Other,Soft}）才意识到问题——
+只取前 3 条 \texttt{[Walmart 降价 / Israeli 军演 / Kim 八卦]} 时，Hard 占了 2 条，
+模型被这种“开头偏置”带跑偏了；
+$k=6$ 时 6 条示例正好三类各 2 条，分布平衡，效果就最好；
+$k=9$ 略降，估计是 prompt 已经长到接近上下文舒适区。
+\textbf{所以 few-shot 的样本选择和顺序，其实比“几条”本身重要得多}。
+
+
+\section{综合实验分析}
+
+\subsection{三模型主对比}
+
+把前面三个模型的最终结果汇总成 \autoref{tab:main-compare}（数据来自
+\texttt{final\_metrics.csv}）。
+
+\begin{table}[!htbp]
+\centering
+\caption{三模型在测试集上的总体指标对比}
+\label{tab:main-compare}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrcccccc}
+\toprule
+模型 & 评测规模 & accuracy & macro-P & macro-R & \textbf{macro-F1} & weighted-F1 & f1\_Other \\
+\midrule
+FastText                & 19\,365 & 0.8272 & 0.7922 & 0.7909 & \textbf{0.7914} & 0.8267 & 0.7082 \\
+\textbf{BERT-base}      & 19\,365 & \textbf{0.8600} & 0.8283 & 0.8302 & \textbf{0.8291} & \textbf{0.8601} & \textbf{0.7554} \\
+RoBERTa-base            & 19\,365 & 0.8600 & 0.8283 & 0.8302 & 0.8291 & 0.8601 & 0.7554 \\
+\midrule
+FastText (sample 500)   & 500     & 0.8140 & 0.7765 & 0.7777 & 0.7767 & 0.8131 & 0.6553 \\
+BERT (sample 500)       & 500     & 0.8520 & 0.8208 & 0.8200 & 0.8201 & 0.8513 & 0.7319 \\
+Qwen-7B (few)           & 500     & 0.5600 & 0.5571 & 0.5474 & 0.4842 & 0.5500 & 0.2112 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[每类 F1 分组柱状图]{\includegraphics[width=0.46\textwidth]{12_per_class_f1.png}}\hfill
+\subfigure[三模型混淆矩阵 subplot]{\includegraphics[width=0.46\textwidth]{13_confusion_all.png}}
+\caption{三模型主对比可视化：(a) 每类 F1 显示三个模型在 Soft 类上都最强，
+Hard 次之，Other 最弱；Qwen 在 Other 类几乎崩溃；
+(b) 混淆矩阵 subplot 让差异一眼能看出来。}
+\label{fig:main-compare}
+\end{figure}
+
+\textbf{几个直观的观察}：
+\begin{itemize}
+    \item 全测试集 19\,365 条上，BERT-base 比 FastText 高 3.8 pp（macro-F1 0.8291 vs 0.7914）；
+    \item 抽样 500 条上，BERT 仍然领先 FastText 4.3 pp，但 Qwen-7B 落后 BERT 整整 \textbf{34 pp}；
+    \item 三个模型差距最大的是 Other 类 F1（BERT 0.74 / FastText 0.71 / Qwen 0.21），
+          说明“任务定义型标签”对 LLM 的零样本能力是个\textbf{挺大的坎}；
+    \item 抽样 500 条的 BERT/FastText 跟全测试集差距只有 0.7 pp 左右，
+          说明这 500 条样本\textbf{足够代表全集}，能直接拿去跟 Qwen 对照。
+\end{itemize}
+
+\subsection{错例重叠与人工错因分析}\label{sec:err-analysis}
+
+为了搞清楚\textbf{Qwen 为什么比微调小模型差这么多}，我做了两件事：
+一是画三模型错样本的维恩图，二是从三模型预测打架的样本里挑 30 条做人工错因标注。
+
+\begin{figure}[!htbp]
+\centering
+\subfigure[三模型错例集合维恩图]{\includegraphics[width=0.45\textwidth]{14_error_venn.png}}\hfill
+\subfigure[人工错因分类饼图]{\includegraphics[width=0.45\textwidth]{15_error_pie.png}}
+\caption{(a) 维恩图基于 500 抽样：FastText、BERT、Qwen 各自的错样本集合，
+交叉部分是“三个模型都错”的真正难样本；
+(b) 30 条三模型预测不一致样本的人工错因分布：
+\texttt{entity-bias} 与 \texttt{fuzzy-other} 各 12 条（40\,\%），\texttt{ambiguous} 6 条（20\,\%）。}
+\label{fig:err}
+\end{figure}
+
+\textbf{错因三类的具体含义}（标注规则）：
+
+\begin{table}[!htbp]
+\centering
+\caption{人工错因标注三类的定义与典型例子}
+\label{tab:err-type}
+\begin{tabular}{lp{4.5cm}p{6.5cm}}
+\toprule
+错因 & 定义 & 例子 \\
+\midrule
+\texttt{entity-bias}
+  & 标题里的实体（人名/队名/品牌）让某个模型跑偏
+  & \emph{Boomer Esiason: Jamal Adams Didn't Demand Trade}（真值 Soft，Qwen 看到 trade 判 Hard）\\
+\midrule
+\texttt{fuzzy-other}
+  & 真值是 Other（health / autos / tech / 地方综合），但模型把它当成 Hard 或 Soft
+  & \emph{Monkeypox is mutating 12 times faster than expected}（真值 Other，Qwen 判 Hard）\\
+\midrule
+\texttt{ambiguous}
+  & 标题信息少 / 跨主题，连人都不一定一致
+  & \emph{Border wall, impeachment battle imperil budget progress} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{解读这三类错因}：
+\begin{itemize}
+    \item \texttt{fuzzy-other}（40\,\%）：这是 LLM 最大的盲区。
+          在 Qwen 的预训练知识里，health / tech / science 都是独立的“科普类”，
+          但这次作业的 Excel 体系把它们都归到 Other——LLM 没见过这个映射规则，
+          只能瞎猜，所以 Other 类 F1 一直卡在 0.21。
+    \item \texttt{entity-bias}（40\,\%）：标题里出现 Lakers、Mets、NHL、
+          Mike Tomlin、Katie Holmes 这些体育 / 明星实体的时候，
+          Qwen 经常被表面 trade、loss、scores 这些“中性词”带向 Hard。
+          BERT 因为吃过 17 万条训练数据，“人名 + 体育术语” 已经绑定到 Soft 类上了，
+          几乎不犯这种错。
+    \item \texttt{ambiguous}（20\,\%）：剩下这部分是真的难，三个模型都做错，
+          我把这部分单独拿出来，避免把“任务难度”误算到模型头上。
+\end{itemize}
+
+这一小节是我自己觉得最值得展开的——它\textbf{把“LLM macro-F1 为什么塌方”这件事解释清楚了}，
+也给“什么情况下 LLM 不如微调小模型”提供了一个具体的例证。
+
+\subsection{三模型集成投票}
+
+脚本 \verb|10_ensemble.py|，对 500 抽样上的三模型预测做\textbf{多数投票}（票数相同时按 BERT > FastText > Qwen 优先级裁断）：
+
+\begin{table}[!htbp]
+\centering
+\caption{三模型集成 vs 单模型（500 抽样）}
+\label{tab:ensemble}
+\begin{tabular}{lccc}
+\toprule
+方法 & accuracy & macro-F1 & weighted-F1 \\
+\midrule
+FastText (单)         & 0.814 & 0.7767 & 0.8131 \\
+\textbf{BERT (单)}    & \textbf{0.852} & \textbf{0.8201} & \textbf{0.8513} \\
+Qwen-7B (单)          & 0.560 & 0.4842 & 0.5500 \\
+\midrule
+\texttt{Ensemble} (vote) & 0.848 & 0.8120 & 0.8458 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.55\textwidth]{16_ensemble_confusion.png}
+\caption{三模型多数投票集成的混淆矩阵。
+和 BERT 单模相比，Other 类召回从 0.74 降到 0.64——
+就是因为 Qwen 把许多 Other 拉到 Hard 那一票，多数投票后变成 Hard。}
+\label{fig:ensemble-cm}
+\end{figure}
+
+集成的 macro-F1 比 BERT 单模\textbf{反倒低了 0.8 pp}，挺反直觉的。
+原因前面已经讲过：\textbf{Qwen 大量把 Other 错判成 Hard}，
+就算 FastText 和 BERT 都判对了 Other，三票里 Qwen 还是贡献一张 Hard，
+多数投票就会出现“以错带对”的情况。
+工程上的启示是：\textbf{集成的几个成员，错样本之间得足够独立，集成才会真的有用}；
+某个成员对某一类有系统性偏置时，平均反而会把另外两个的优势稀释掉。
+
+\subsection{训练 / 推理成本对比}\label{sec:cost}
+
+\begin{table}[!htbp]
+\centering
+\caption{三种方法的训练与推理成本（数据来自运行日志）}
+\label{tab:cost}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrcccc}
+\toprule
+模型 & 参数量 & 训练时长 & 推理 (ms/样本) & 峰值显存 & 硬件 \\
+\midrule
+FastText (best)        & $\sim$1M  & 0.05 min     & 0.05  & 120 MB  & CPU \\
+BERT-base              & 110M      & 11.8 min     & 0.72  & 4.5 GB & 3090 fp16 bs=32 \\
+RoBERTa-base           & 125M      & 12.3 min     & 0.72  & 5.5 GB & 3090 fp16 bs=32 \\
+Qwen2.5-1.5B (4bit)    & 1.5B      & 0 (推理)     & 23.8  & 1.5 GB & 3090 4bit bs=8 \\
+Qwen2.5-7B (4bit)      & 7B        & 0 (推理)     & 104.0 & 6.0 GB & 3090 4bit bs=4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+把这张表跟 \autoref{tab:main-compare} 摆在一起看，“性价比”就一目了然：
+\begin{itemize}
+    \item \textbf{FastText 是性价比之王}：3 秒训练换来 macro-F1=0.79，
+          每样本推理只要 0.05 ms（差不多是 BERT 的 1/14、Qwen-7B 的 1/2080）；
+    \item \textbf{BERT 是精度之王}：12 分钟训练能拿到 0.83，
+          代价是 4.5 GB 显存和“必须有 GPU”这件事；
+    \item \textbf{Qwen-7B 是“万金油”}：零训练就能上手，
+          但精度差一截，推理还慢 100 倍以上，
+          只有在标注稀缺、需要快速冷启动的场景下才有它的位置。
+\end{itemize}
+
+
+\section{总结与场景适用性讨论}
+
+\subsection{核心发现}
+
+整个实验跑完，几个我觉得最值得记下来的结论，按“反直觉程度”排：
+
+\begin{enumerate}
+    \item \textbf{在标签靠“映射表”定义的任务上，LLM 远不如微调小模型}。
+          Qwen-7B 哪怕用 6-shot prompt，macro-F1 也只到 0.48，
+          比 BERT-base 低 34 pp、比 FastText 还低 30 pp。
+          这并不是因为 Qwen 不懂英文新闻，而是它\textbf{不知道这次作业里 Other 类的边界在哪}。
+    \item \textbf{few-shot 不是越多越好}。3-shot 比 0-shot 还差 2.5 pp，到 6-shot 才回升；
+          所以 in-context 示例的\textbf{选择和顺序，比数量重要得多}。
+    \item \textbf{集成投票不一定能涨点}。如果其中一个成员对某一类系统性偏置严重，
+          多数投票就会“以错带对”。这次作业里 Qwen 把 Ensemble 拉到比 BERT 单模还低 0.8 pp。
+    \item \textbf{BERT 和 RoBERTa 在粗粒度任务上基本打平}。两者 macro-F1 差不到 0.02 pp，
+          训练时长也差不多——RoBERTa 论文里那些预训练改进，要在 SuperGLUE 类任务上才看得见，
+          这种 3 类粗粒度分类是放大不出来的。
+    \item \textbf{BERT 在 30\,\%–60\,\% 数据量左右就接近性能拐点}。
+          再加一倍数据估计也就涨 0.5–0.8 pp，“加数据”在这种短文本任务上不是最优投入。
+\end{enumerate}
+
+\subsection{三种方法的适用场景}
+
+\begin{table}[!htbp]
+\centering
+\caption{三种方法的适用场景小结}
+\label{tab:scenario}
+\begin{tabular}{lp{10cm}}
+\toprule
+方法 & 适用场景 \\
+\midrule
+\textbf{FastText}
+    & • 海量短文本分类（评论、标题、tag）；\par
+      • 上线 QPS 要求高（推理 0.05 ms / 样本，CPU 即可）；\par
+      • 类别数极多（分层 softmax 的优势；这次作业里没体现）；\par
+      • 资源极受限的边缘部署。 \\
+\midrule
+\textbf{BERT 系列微调}
+    & • 中等数据规模（$10^4$–$10^6$）、追求最高精度；\par
+      • 标签体系明确、有 ground truth；\par
+      • 可以接受 GPU 训练成本（10 分钟级）和 4 GB 级显存；\par
+      • 现实业务中绝大多数文本分类任务的首选。 \\
+\midrule
+\textbf{开源大模型 (Qwen / Llama)}
+    & • 标注极度稀缺 / 完全没标注（zero-shot 冷启动）；\par
+      • 类别频繁变更，重训成本高；\par
+      • 需要给出\textbf{自然语言解释}的场景（CoT / RAG）；\par
+      • 任务定义本身依赖通用世界知识（如情感、立场、命名实体），\par
+      \quad\textbf{而不是依赖任务特定的标签映射规则}。\par
+      • 不适合“标签靠规则定义”的这种任务，遇到这种情况应该
+      \textbf{先用 LLM 帮做弱标注，再训 BERT}。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{个人体会}
+
+整个 pipeline 跑下来，我最大的感受是：\textbf{越是看起来“简单”的任务，越容易暴露出 LLM 的边界}。
+这次作业标签只有 3 类、标题平均也就 10 词，但偏偏因为 Other 是“任务定义的兜底类”，
+Qwen 在 zero/few-shot 下几乎使不上力。
+反过来，FastText 这种 30 年前思想的浅层模型，在数据量够的情况下还能拿到 macro-F1=0.79——
+所以\textbf{越工程化的任务，越得相信“小模型 + 干净数据 + 合理特征”这套老路}。
+
+另一个体会是\textbf{消融实验比单纯报 baseline 有说服力得多}。
+这次额外做的 5 组消融（max\_len、lr、数据量、Qwen 规模、few-shot 数）
+没刷出新的 SOTA，但它们分别在回答：“加数据到底有没有用？”、
+“prompt 多给几个例子有没有用？”、“模型再小一点会怎样？”——
+这些问题恰恰是真把模型部署上线时绕不过去的。
+
+最后是\textbf{错例分析的价值}：30 条样本人工标 10 分钟就搞完了，
+但它给整份报告提供的“LLM 在 Other 类为什么塌方”的具体证据，
+是单看 F1 数字怎么也得不到的。这一段是这次作业里我自己觉得收获最大的。
+
+
+% =============================================
+% Part 5: 参考文献
+% =============================================
+\newpage
+\bibliographystyle{ieeetr}
+\bibliography{reference.bib}
+
+\end{document}

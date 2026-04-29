@@ -1,0 +1,42 @@
+\begin{thebibliography}{1}
+
+\bibitem{wu2020mind}
+F.~Wu, Y.~Qiao, J.-H. Chen, C.~Wu, T.~Qi, J.~Lian, D.~Liu, X.~Xie, J.~Gao,
+  W.~Wu, and M.~Zhou, ``{MIND}: A large-scale dataset for news
+  recommendation,'' in {\em ACL}, pp.~3597--3606, 2020.
+
+\bibitem{joulin2017fasttext}
+A.~Joulin, E.~Grave, P.~Bojanowski, and T.~Mikolov, ``Bag of tricks for
+  efficient text classification,'' in {\em Proceedings of the 15th Conference
+  of the European Chapter of the Association for Computational Linguistics},
+  pp.~427--431, 2017.
+
+\bibitem{bojanowski2017enriching}
+P.~Bojanowski, E.~Grave, A.~Joulin, and T.~Mikolov, ``Enriching word vectors
+  with subword information,'' in {\em Transactions of the Association for
+  Computational Linguistics}, vol.~5, pp.~135--146, 2017.
+
+\bibitem{devlin2019bert}
+J.~Devlin, M.-W. Chang, K.~Lee, and K.~Toutanova, ``{BERT}: Pre-training of
+  deep bidirectional transformers for language understanding,'' in {\em
+  NAACL-HLT}, pp.~4171--4186, 2019.
+
+\bibitem{vaswani2017attention}
+A.~Vaswani, N.~Shazeer, N.~Parmar, J.~Uszkoreit, L.~Jones, A.~N. Gomez,
+  {\L}.~Kaiser, and I.~Polosukhin, ``Attention is all you need,'' {\em Advances
+  in Neural Information Processing Systems}, vol.~30, 2017.
+
+\bibitem{liu2019roberta}
+Y.~Liu, M.~Ott, N.~Goyal, J.~Du, M.~Joshi, D.~Chen, O.~Levy, M.~Lewis,
+  L.~Zettlemoyer, and V.~Stoyanov, ``{RoBERTa}: A robustly optimized {BERT}
+  pretraining approach,'' {\em arXiv preprint arXiv:1907.11692}, 2019.
+
+\bibitem{yang2024qwen2}
+A.~Yang {\em et~al.}, ``{Qwen2.5} technical report,'' {\em arXiv preprint
+  arXiv:2412.15115}, 2024.
+
+\bibitem{brown2020gpt3}
+T.~B. Brown, B.~Mann, N.~Ryder, {\em et~al.}, ``Language models are few-shot
+  learners,'' in {\em NeurIPS}, 2020.
+
+\end{thebibliography}

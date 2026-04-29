@@ -1,0 +1,36 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Large artifacts — 预训练权重、ModelScope 缓存与训练输出（勿提交）
+models/
+models/.lock/
+models/._____temp/
+# 含 BERT checkpoint、Qwen 抽样与预测等
+outputs/
+data_clean/
+
+# Logs
+*.log
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local secrets / env
+.env
+.env.*

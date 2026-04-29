@@ -1,0 +1,2 @@
+# 3090 机器额外装的（Mac 装不上，用到 4bit 量化推理 Qwen）
+bitsandbytes>=0.43
